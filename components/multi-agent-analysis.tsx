@@ -1,532 +1,627 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Database, GitBranch, CheckCircle2, FileText, Play, ChevronRight, Beaker, TrendingUp, Settings, Activity } from 'lucide-react'
+import { Slider } from '@/components/ui/slider'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Database, Play, Pause, RotateCcw, AlertCircle, Beaker, TrendingUp, Settings, FileText, CheckCircle2 } from 'lucide-react'
+import * as d3 from 'd3'
 
-const agents = [
-  {
-    id: 1,
-    name: 'Data Retrieval Agent',
-    icon: Database,
-    color: 'text-chart-1',
-    status: 'idle' as const,
-  },
-  {
-    id: 2,
-    name: 'Correlation Agent',
-    icon: GitBranch,
-    color: 'text-chart-2',
-    status: 'idle' as const,
-  },
-  {
-    id: 3,
-    name: 'Evaluation Agent',
-    icon: Activity,
-    color: 'text-chart-3',
-    status: 'idle' as const,
-  },
-  {
-    id: 4,
-    name: 'Summary Agent',
-    icon: FileText,
-    color: 'text-chart-4',
-    status: 'idle' as const,
-  },
-]
+
+interface Node {
+  id: string
+  type: 'data-source' | 'agent' | 'hypothesis' | 'root-cause'
+  iteration: number
+  x: number
+  y: number
+  label: string
+  confidence?: number
+  status: 'active' | 'completed' | 'pending'
+  dependencies: string[]
+  agentId?: number
+  data?: any
+}
+
+interface Link {
+  source: string
+  target: string
+  type: 'data-flow' | 'collaboration' | 'conclusion'
+}
 
 export function MultiAgentAnalysis() {
-  const [activeAgent, setActiveAgent] = useState<number | null>(null)
-  const [analysisStarted, setAnalysisStarted] = useState(false)
-  const [simulationRun, setSimulationRun] = useState(false)
-  const [selectedChanges, setSelectedChanges] = useState<string[]>([])
+  const [iterationRange, setIterationRange] = useState([8])
+  const [showRejected, setShowRejected] = useState(false)
+  const [showDependencies, setShowDependencies] = useState(true)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+  const svgRef = useRef<SVGSVGElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
-  const startAnalysis = () => {
-    setAnalysisStarted(true)
-    setActiveAgent(1)
-  }
+  // Generate nodes and links for the multi-agent diagnostic process
+  const generateGraph = (maxIteration: number) => {
+    const nodes: Node[] = []
+    const links: Link[] = []
 
-  const nextAgent = () => {
-    if (activeAgent && activeAgent < 4) {
-      setActiveAgent(activeAgent + 1)
+    // Data sources (iteration 0)
+    const dataSources = [
+      { id: 'ds-logs', label: 'Instrument Logs', y: 0 },
+      { id: 'ds-qc', label: 'QC Data', y: 1 },
+      { id: 'ds-telemetry', label: 'Telemetry', y: 2 },
+      { id: 'ds-env', label: 'Environmental', y: 3 },
+    ]
+
+    dataSources.forEach(ds => {
+      nodes.push({
+        id: ds.id,
+        type: 'data-source',
+        iteration: 0,
+        x: 0,
+        y: ds.y,
+        label: ds.label,
+        status: 'completed',
+        dependencies: [],
+      })
+    })
+
+    // Agent hypotheses across iterations
+    const agents = [
+      { id: 1, name: 'Data Agent', color: '#3b82f6' },
+      { id: 2, name: 'Correlation Agent', color: '#8b5cf6' },
+      { id: 3, name: 'Evaluation Agent', color: '#ec4899' },
+      { id: 4, name: 'Summary Agent', color: '#10b981' },
+    ]
+
+    for (let iter = 1; iter <= maxIteration; iter++) {
+      // Each agent generates hypotheses
+      agents.forEach((agent, agentIdx) => {
+        const numHypotheses = iter < 3 ? Math.floor(Math.random() * 3) + 2 : Math.floor(Math.random() * 2) + 1
+        
+        for (let h = 0; h < numHypotheses; h++) {
+          const confidence = Math.random() * 0.4 + 0.3 + (iter / maxIteration) * 0.3
+          const isRejected = confidence < 0.5 && iter > 2
+          const hypothesisId = `h-${iter}-${agent.id}-${h}`
+          
+          nodes.push({
+            id: hypothesisId,
+            type: 'hypothesis',
+            iteration: iter,
+            x: iter,
+            y: agentIdx * 3 + h,
+            label: `Hypothesis ${agent.id}.${h}`,
+            confidence: confidence,
+            status: isRejected ? 'pending' : iter === maxIteration ? 'active' : 'completed',
+            dependencies: [],
+            agentId: agent.id,
+            data: { agentName: agent.name, color: agent.color, rejected: isRejected }
+          })
+
+          // Link from data sources (iteration 1)
+          if (iter === 1) {
+            dataSources.forEach(ds => {
+              if (Math.random() > 0.5) {
+                links.push({
+                  source: ds.id,
+                  target: hypothesisId,
+                  type: 'data-flow'
+                })
+              }
+            })
+          } else {
+            // Link from previous iteration hypotheses
+            const prevNodes = nodes.filter(n => n.iteration === iter - 1 && n.type === 'hypothesis')
+            const relevantPrev = prevNodes.filter(() => Math.random() > 0.3).slice(0, 3)
+            relevantPrev.forEach(prevNode => {
+              links.push({
+                source: prevNode.id,
+                target: hypothesisId,
+                type: 'collaboration'
+              })
+            })
+          }
+        }
+      })
     }
+
+    // Add root cause nodes at the end
+    const finalHypotheses = nodes.filter(n => n.iteration === maxIteration && n.type === 'hypothesis' && !n.data?.rejected)
+    const topHypotheses = finalHypotheses
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+      .slice(0, 3)
+
+    topHypotheses.forEach((hyp, idx) => {
+      const rcId = `rc-${idx}`
+      nodes.push({
+        id: rcId,
+        type: 'root-cause',
+        iteration: maxIteration + 1,
+        x: maxIteration + 1,
+        y: idx * 4 + 2,
+        label: `Root Cause ${idx + 1}`,
+        confidence: hyp.confidence,
+        status: idx === 0 ? 'active' : 'completed',
+        dependencies: [hyp.id],
+      })
+
+      links.push({
+        source: hyp.id,
+        target: rcId,
+        type: 'conclusion'
+      })
+    })
+
+    return { nodes, links }
   }
 
-  const runSimulation = () => {
-    setSimulationRun(true)
-  }
+  useEffect(() => {
+    if (!svgRef.current) return
 
-  const toggleChange = (change: string) => {
-    setSelectedChanges(prev =>
-      prev.includes(change)
-        ? prev.filter(c => c !== change)
-        : [...prev, change]
-    )
-  }
+    const svg = d3.select(svgRef.current)
+    const width = svgRef.current.clientWidth
+    const height = 600
+
+    svg.selectAll('*').remove()
+
+    const { nodes, links } = generateGraph(iterationRange[0])
+
+    // Filter nodes based on settings
+    const visibleNodes = nodes.filter(n => {
+      if (!showRejected && n.data?.rejected) return false
+      return true
+    })
+
+    const nodeMap = new Map(visibleNodes.map(n => [n.id, n]))
+
+    // Calculate layout
+    const maxIter = Math.max(...visibleNodes.map(n => n.iteration))
+    const xScale = d3.scaleLinear()
+      .domain([0, maxIter + 1])
+      .range([80, width - 80])
+
+    // Group nodes by iteration to calculate y positions
+    const nodesByIteration = d3.group(visibleNodes, n => n.iteration)
+    nodesByIteration.forEach((iterNodes, iter) => {
+      const ySpacing = height / (iterNodes.length + 1)
+      iterNodes.forEach((node, idx) => {
+        node.x = xScale(node.iteration)
+        node.y = ySpacing * (idx + 1)
+      })
+    })
+
+    const g = svg.append('g')
+
+    const validLinks = links.filter(link => {
+      return nodeMap.has(link.source) && nodeMap.has(link.target)
+    })
+
+    // Draw links
+    const linkElements = g.selectAll('.link')
+      .data(validLinks)
+      .enter()
+      .append('line')
+      .attr('class', 'link')
+      .attr('x1', d => {
+        const source = nodeMap.get(d.source)
+        return source?.x || 0
+      })
+      .attr('y1', d => {
+        const source = nodeMap.get(d.source)
+        return source?.y || 0
+      })
+      .attr('x2', d => {
+        const target = nodeMap.get(d.target)
+        return target?.x || 0
+      })
+      .attr('y2', d => {
+        const target = nodeMap.get(d.target)
+        return target?.y || 0
+      })
+      .attr('stroke', d => {
+        if (d.type === 'conclusion') return '#10b981'
+        if (d.type === 'data-flow') return '#3b82f6'
+        return '#94a3b8'
+      })
+      .attr('stroke-width', d => d.type === 'conclusion' ? 3 : 1.5)
+      .attr('stroke-opacity', d => showDependencies ? (d.type === 'conclusion' ? 0.8 : 0.3) : 0.1)
+      .attr('stroke-dasharray', d => d.type === 'collaboration' ? '5,5' : '0')
+
+    // Draw nodes
+    const nodeGroups = g.selectAll('.node')
+      .data(visibleNodes)
+      .enter()
+      .append('g')
+      .attr('class', 'node')
+      .attr('transform', d => `translate(${d.x}, ${d.y})`)
+      .style('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        setSelectedNode(d)
+        setTooltipPos({ x: event.pageX, y: event.pageY })
+        
+        d3.select(this).select('circle')
+          .transition()
+          .duration(200)
+          .attr('r', d.type === 'data-source' ? 22 : d.type === 'root-cause' ? 26 : 18)
+      })
+      .on('mouseout', function(event, d) {
+        d3.select(this).select('circle')
+          .transition()
+          .duration(200)
+          .attr('r', d.type === 'data-source' ? 18 : d.type === 'root-cause' ? 22 : 14)
+      })
+      .on('mousemove', function(event) {
+        setTooltipPos({ x: event.pageX, y: event.pageY })
+      })
+
+    // Node circles
+    nodeGroups.append('circle')
+      .attr('r', d => d.type === 'data-source' ? 18 : d.type === 'root-cause' ? 22 : 14)
+      .attr('fill', d => {
+        if (d.type === 'data-source') return '#3b82f6'
+        if (d.type === 'root-cause') return d.status === 'active' ? '#10b981' : '#6b7280'
+        if (d.data?.rejected) return '#ef4444'
+        if (d.status === 'active') return d.data?.color || '#8b5cf6'
+        if (d.status === 'completed') return '#6b7280'
+        return '#94a3b8'
+      })
+      .attr('stroke', d => d.status === 'active' ? '#fff' : 'none')
+      .attr('stroke-width', 3)
+      .attr('opacity', d => d.data?.rejected ? 0.3 : 1)
+
+    // Confidence text for hypotheses and root causes
+    nodeGroups.filter(d => d.confidence)
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 4)
+      .attr('fill', 'white')
+      .attr('font-size', d => d.type === 'root-cause' ? '11px' : '9px')
+      .attr('font-weight', 'bold')
+      .text(d => Math.round((d.confidence || 0) * 100) + '%')
+
+    // Iteration labels at top
+    const iterations = Array.from(new Set(visibleNodes.map(n => n.iteration))).sort((a, b) => a - b)
+    iterations.forEach(iter => {
+      g.append('text')
+        .attr('x', xScale(iter))
+        .attr('y', 20)
+        .attr('text-anchor', 'middle')
+        .attr('fill', 'hsl(var(--muted-foreground))')
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .text(iter === 0 ? 'Data Sources' : iter > maxIter ? 'Root Causes' : `Iter ${iter}`)
+    })
+
+  }, [iterationRange, showRejected, showDependencies])
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setIterationRange(prev => {
+          const newVal = prev[0] >= 8 ? 1 : prev[0] + 1
+          return [newVal]
+        })
+      }, 1000)
+    }
+    return () => clearInterval(interval)
+  }, [isPlaying])
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-foreground mb-2">Multi-Agent Analysis</h2>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight">Multi-Agent Analysis</h1>
         <p className="text-muted-foreground">
-          {'Adaptive Diagnostics for Recurring Lab Anomalies'}
+          Adaptive Diagnostics for Recurring Lab Anomalies
         </p>
       </div>
 
-      {/* Anomalies Overview */}
-      <Card className="bg-destructive/5 border-destructive/20">
+      <Card className="bg-gradient-to-br from-destructive/5 to-destructive/10 border-destructive/30 shadow-md">
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-2">
-              <CardTitle className="text-destructive">
-                {'Recurring Anomalies Detected'}
+              <CardTitle className="text-destructive text-xl flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                Recurring Anomalies Detected
               </CardTitle>
               <CardDescription>
-                {'Assay XYZ showing consistent issues over last 14 days'}
+                Assay XYZ showing consistent issues over last 14 days
               </CardDescription>
             </div>
-            {!analysisStarted && (
-              <Button onClick={startAnalysis}>
-                <Play className="mr-2 h-4 w-4" />
-                {'Run Deep Analysis'}
-              </Button>
-            )}
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-6">
+            {[
+              { label: 'Affected Runs', value: '18', icon: Beaker },
+              { label: 'Failure Rate Increase', value: '32%', icon: TrendingUp },
+              { label: 'Affected Instruments', value: '2', icon: Settings },
+            ].map((stat) => {
+              const Icon = stat.icon
+              return (
+                <div key={stat.label} className="p-4 bg-background/50 rounded-lg border shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground font-medium">{stat.label}</p>
+                  </div>
+                  <p className="text-3xl font-bold">{stat.value}</p>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-md">
+        <CardHeader className="border-b bg-muted/30">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground mb-1">{'Affected Runs'}</p>
-              <p className="text-3xl font-bold">{'18'}</p>
+              <CardTitle className="text-xl">Multi-Agent Collaborative Diagnostic Pipeline</CardTitle>
+              <CardDescription>
+                Interactive visualization showing agent iterations, hypothesis formation, and root cause determination
+              </CardDescription>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">{'Failure Rate Increase'}</p>
-              <p className="text-3xl font-bold">{'32%'}</p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIterationRange([1])}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={isPlaying ? "destructive" : "default"}
+                size="icon"
+                onClick={() => setIsPlaying(!isPlaying)}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">{'Affected Instruments'}</p>
-              <p className="text-3xl font-bold">{'2'}</p>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-4">
+          {/* Control Panel */}
+          <div className="grid grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg border">
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Select Iteration Range:</Label>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground min-w-[60px]">Iter {iterationRange[0]}</span>
+                <Slider
+                  value={iterationRange}
+                  onValueChange={setIterationRange}
+                  min={1}
+                  max={8}
+                  step={1}
+                  className="flex-1"
+                />
+                <span className="text-sm font-bold min-w-[40px] text-right">{iterationRange[0]}</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Display Options:</Label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="rejected"
+                    checked={showRejected}
+                    onCheckedChange={(checked) => setShowRejected(checked as boolean)}
+                  />
+                  <Label htmlFor="rejected" className="text-sm cursor-pointer">
+                    Show rejected hypotheses
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="dependencies"
+                    checked={showDependencies}
+                    onCheckedChange={(checked) => setShowDependencies(checked as boolean)}
+                  />
+                  <Label htmlFor="dependencies" className="text-sm cursor-pointer">
+                    Show dependencies
+                  </Label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* D3 Visualization */}
+          <div className="relative border rounded-lg bg-background/50">
+            <svg ref={svgRef} width="100%" height="600" className="overflow-visible" />
+            
+            {/* Tooltip */}
+            {selectedNode && (
+              <div
+                ref={tooltipRef}
+                className="fixed z-50 px-4 py-3 bg-popover text-popover-foreground border rounded-lg shadow-lg max-w-xs pointer-events-none"
+                style={{
+                  left: tooltipPos.x + 15,
+                  top: tooltipPos.y + 15,
+                }}
+              >
+                <div className="space-y-1">
+                  <p className="font-semibold text-sm">{selectedNode.label}</p>
+                  {selectedNode.data?.agentName && (
+                    <p className="text-xs text-muted-foreground">Agent: {selectedNode.data.agentName}</p>
+                  )}
+                  {selectedNode.confidence && (
+                    <p className="text-xs">
+                      <span className="text-muted-foreground">Confidence:</span>{' '}
+                      <span className="font-bold">{Math.round(selectedNode.confidence * 100)}%</span>
+                    </p>
+                  )}
+                  <p className="text-xs">
+                    <span className="text-muted-foreground">Status:</span>{' '}
+                    <span className={`font-medium ${
+                      selectedNode.status === 'active' ? 'text-primary' :
+                      selectedNode.status === 'completed' ? 'text-green-600' : 'text-muted-foreground'
+                    }`}>
+                      {selectedNode.status === 'active' ? 'Active Hypothesis' :
+                       selectedNode.status === 'completed' ? 'Completed' : 'Pending'}
+                    </span>
+                  </p>
+                  {selectedNode.type === 'hypothesis' && selectedNode.data?.rejected && (
+                    <Badge variant="destructive" className="text-xs">Rejected - Low Confidence</Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-6 p-4 bg-muted/30 rounded-lg border text-sm flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-[#3b82f6]" />
+              <span>Data Sources</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-[#8b5cf6]" />
+              <span>Active Hypothesis</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-[#6b7280]" />
+              <span>Completed</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-[#10b981]" />
+              <span>Selected Root Cause</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-[#ef4444] opacity-30" />
+              <span>Rejected</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {analysisStarted && (
-        <>
-          {/* Agent Pipeline */}
-          <Card>
-            <CardHeader>
-              <CardTitle>{'Multi-Agent Diagnostic Pipeline'}</CardTitle>
-              <CardDescription>
-                {'Collaborative AI agents analyzing anomaly patterns'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-4 gap-4">
-                {agents.map((agent, idx) => {
-                  const Icon = agent.icon
-                  const isActive = activeAgent === agent.id
-                  const isComplete = activeAgent ? activeAgent > agent.id : false
-
-                  return (
-                    <div key={agent.id} className="relative">
-                      {idx < agents.length - 1 && (
-                        <ChevronRight className="absolute -right-5 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground z-10" />
-                      )}
-                      <div
-                        className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                          isActive
-                            ? 'border-primary bg-primary/5'
-                            : isComplete
-                            ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
-                            : 'border-border'
-                        }`}
-                        onClick={() => activeAgent && activeAgent >= agent.id && setActiveAgent(agent.id)}
-                      >
-                        <div className="flex flex-col items-center text-center gap-3">
-                          <div
-                            className={`h-12 w-12 rounded-full flex items-center justify-center ${
-                              isActive
-                                ? 'bg-primary text-primary-foreground'
-                                : isComplete
-                                ? 'bg-green-500 text-white'
-                                : 'bg-muted'
-                            }`}
-                          >
-                            {isComplete ? (
-                              <CheckCircle2 className="h-6 w-6" />
-                            ) : (
-                              <Icon className={`h-6 w-6 ${isActive ? '' : agent.color}`} />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{agent.name}</p>
-                            <Badge
-                              variant="outline"
-                              className="mt-2"
-                            >
-                              {isComplete ? 'Complete' : isActive ? 'Running' : 'Pending'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+      {/* Analysis Summary */}
+      <Card className="shadow-sm">
+        <CardHeader className="border-b bg-muted/30">
+          <CardTitle className="text-lg">Root Cause Analysis Summary</CardTitle>
+          <CardDescription>Highest confidence hypothesis selected by agents</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-4">
+          <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg">
+            <div className="flex items-start gap-3 mb-3">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-semibold text-green-900 dark:text-green-100">
+                    Degraded Reagent Lot Causing Variable Results
+                  </p>
+                  <Badge className="bg-green-600">92% Confidence</Badge>
+                </div>
+                <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
+                  Multi-agent collaboration across {iterationRange[0]} iterations identified reagent lot 5678 as the primary root cause. 
+                  Data retrieval agent gathered evidence from QC history and instrument logs, correlation agent found 80% 
+                  failure correlation, evaluation agent confirmed with statistical significance, and summary agent selected 
+                  this as the highest confidence root cause for immediate action.
+                </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Agent Output Panel */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>
-                    {activeAgent && agents[activeAgent - 1].name}
-                  </CardTitle>
-                  <CardDescription>{'Analysis results and findings'}</CardDescription>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="p-4 bg-background border rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Data Sources Analyzed</p>
+              <p className="text-2xl font-bold">4</p>
+              <p className="text-xs text-muted-foreground">Logs, QC, Telemetry, Env</p>
+            </div>
+            <div className="p-4 bg-background border rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Hypotheses Generated</p>
+              <p className="text-2xl font-bold">{Math.floor(iterationRange[0] * 2.5)}</p>
+              <p className="text-xs text-muted-foreground">Across all iterations</p>
+            </div>
+            <div className="p-4 bg-background border rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Collaboration Events</p>
+              <p className="text-2xl font-bold">{Math.floor(iterationRange[0] * 4.2)}</p>
+              <p className="text-xs text-muted-foreground">Inter-agent communications</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Download Report */}
+      <Card className="shadow-sm">
+        <CardHeader className="border-b bg-muted/30">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Detailed Analysis Report</CardTitle>
+              <CardDescription>Complete diagnostic findings with evidence and recommendations</CardDescription>
+            </div>
+            <Button size="lg" className="shadow-md">
+              <FileText className="mr-2 h-4 w-4" />
+              Download PDF Report
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {/* PDF Preview */}
+          <div className="bg-white text-black p-8 rounded-lg border-2 shadow-lg">
+            <div className="space-y-6">
+              <div className="border-b-2 border-gray-300 pb-4">
+                <h1 className="text-2xl font-bold text-gray-900">Multi-Agent Diagnostic Analysis Report</h1>
+                <div className="grid grid-cols-2 gap-4 mt-4 text-sm text-gray-600">
+                  <div>
+                    <p className="font-semibold">Analysis ID:</p>
+                    <p>ADAPT-2025-001</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Generated:</p>
+                    <p>{new Date().toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Iterations:</p>
+                    <p>{iterationRange[0]} cycles</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Confidence:</p>
+                    <p className="text-green-600 font-semibold">92%</p>
+                  </div>
                 </div>
-                {activeAgent && activeAgent < 4 && (
-                  <Button onClick={nextAgent}>
-                    {'Next Agent'}
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </Button>
-                )}
               </div>
-            </CardHeader>
-            <CardContent>
-              {activeAgent === 1 && (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    {'Retrieved comprehensive data from multiple sources across the laboratory ecosystem:'}
-                  </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <p className="font-medium text-sm">{'QC History'}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'142 QC records from last 30 days'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <p className="font-medium text-sm">{'Run Logs'}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'Instrument logs from 3 HPLC systems'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <p className="font-medium text-sm">{'Instrument Configs'}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'Method parameters and calibration data'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <p className="font-medium text-sm">{'Reagent Tracking'}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'Lot numbers and expiration dates'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <p className="font-medium text-sm">{'Environmental Logs'}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'Temperature and humidity data'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <p className="font-medium text-sm">{'Maintenance Records'}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'Service history and column replacements'}
-                      </p>
-                    </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-2">Executive Summary</h2>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Multi-agent collaborative analysis across {iterationRange[0]} iterations identified reagent lot 5678 as the primary 
+                  root cause of recurring failures in Assay XYZ with 92% confidence. Four specialized agents gathered data from 
+                  multiple sources, formed and evaluated hypotheses through iterative collaboration, and converged on this 
+                  conclusion with high statistical significance.
+                </p>
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-2">Key Findings</h2>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
+                    <p className="text-gray-700">80% correlation between failed runs and reagent lot 5678</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
+                    <p className="text-gray-700">Statistical significance confirmed through {iterationRange[0]} agent collaboration cycles</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
+                    <p className="text-gray-700">Multiple data sources validated the hypothesis independently</p>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {activeAgent === 2 && (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {'Identified statistically significant correlations between failures and operational parameters:'}
-                  </p>
-                  <div className="space-y-3">
-                    <div className="p-4 border-l-4 border-destructive bg-destructive/5 rounded">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="font-semibold text-sm">{'Reagent Lot Correlation'}</p>
-                        <Badge variant="destructive">{'High'}</Badge>
-                      </div>
-                      <p className="text-sm mb-2">
-                        {'80% of failed runs used reagent lot 5678 on Instrument B'}
-                      </p>
-                      <Progress value={80} className="h-2" />
-                    </div>
-                    <div className="p-4 border-l-4 border-orange-500 bg-orange-50 dark:bg-orange-950/20 rounded">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="font-semibold text-sm">{'Environmental Condition'}</p>
-                        <Badge className="bg-orange-500">{'Medium'}</Badge>
-                      </div>
-                      <p className="text-sm mb-2">
-                        {'65% of failures occurred when room temperature exceeded 27°C'}
-                      </p>
-                      <Progress value={65} className="h-2 bg-orange-200" />
-                    </div>
-                    <div className="p-4 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 rounded">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="font-semibold text-sm">{'Column Age'}</p>
-                        <Badge className="bg-yellow-600">{'Low'}</Badge>
-                      </div>
-                      <p className="text-sm mb-2">
-                        {'Column B-003 has 2400 injections (recommended max: 2000)'}
-                      </p>
-                      <Progress value={35} className="h-2 bg-yellow-200" />
-                    </div>
-                  </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-2">Recommended Actions</h2>
+                <div className="border-l-4 border-red-500 pl-3 py-2">
+                  <p className="font-semibold text-gray-900">Immediate: Quarantine and replace reagent lot 5678</p>
+                  <p className="text-sm text-gray-600">Expected to resolve 80% of recurring failures</p>
                 </div>
-              )}
-
-              {activeAgent === 3 && (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {'Evaluated hypotheses using statistical models and domain expertise:'}
-                  </p>
-                  <div className="space-y-3">
-                    {[
-                      {
-                        hypothesis: 'Degraded reagent lot causing variable results',
-                        confidence: 92,
-                        supporting: 4,
-                        contradicting: 0,
-                      },
-                      {
-                        hypothesis: 'Column performance degradation affecting separation',
-                        confidence: 78,
-                        supporting: 3,
-                        contradicting: 1,
-                      },
-                      {
-                        hypothesis: 'Environmental temperature affecting chromatography',
-                        confidence: 65,
-                        supporting: 2,
-                        contradicting: 1,
-                      },
-                    ].map((item, idx) => (
-                      <div key={idx} className="p-4 bg-muted/50 rounded-lg">
-                        <div className="flex items-start justify-between mb-3">
-                          <p className="font-medium text-sm flex-1">{item.hypothesis}</p>
-                          <Badge
-                            variant={
-                              item.confidence > 80
-                                ? 'default'
-                                : item.confidence > 60
-                                ? 'secondary'
-                                : 'outline'
-                            }
-                          >
-                            {item.confidence}{'% confidence'}
-                          </Badge>
-                        </div>
-                        <Progress value={item.confidence} className="h-2 mb-2" />
-                        <div className="flex gap-4 text-xs text-muted-foreground">
-                          <span>
-                            <CheckCircle2 className="inline h-3 w-3 mr-1 text-green-500" />
-                            {item.supporting}{' supporting'}
-                          </span>
-                          <span>{item.contradicting}{' contradicting'}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeAgent === 4 && (
-                <div className="space-y-4">
-                  <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                    <p className="font-semibold mb-2">{'Root Cause Analysis Summary'}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {'The recurring anomalies in Assay XYZ are primarily caused by degraded reagent lot 5678, compounded by column aging and suboptimal environmental conditions. The reagent lot shows 92% correlation with failures and should be immediately replaced. Secondary factors include column B-003 exceeding recommended injection count and elevated ambient temperatures affecting separation reproducibility.'}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="font-semibold text-sm">{'Recommended Actions (Priority Order):'}</p>
-                    <div className="space-y-2">
-                      {[
-                        {
-                          priority: 1,
-                          action: 'Quarantine and replace reagent lot 5678',
-                          impact: 'Expected to resolve 80% of failures',
-                        },
-                        {
-                          priority: 2,
-                          action: 'Replace column B-003 with fresh column',
-                          impact: 'Restore baseline separation performance',
-                        },
-                        {
-                          priority: 3,
-                          action: 'Implement HVAC monitoring and alerts',
-                          impact: 'Prevent temperature-related variability',
-                        },
-                      ].map((item) => (
-                        <div key={item.priority} className="flex items-start gap-3 p-3 bg-background border rounded-lg">
-                          <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold flex-shrink-0">
-                            {item.priority}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{item.action}</p>
-                            <p className="text-xs text-muted-foreground">{item.impact}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Digital Twin Simulation */}
-          {activeAgent === 4 && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Beaker className="h-5 w-5 text-chart-3" />
-                  <CardTitle>{'Digital Twin Simulation'}</CardTitle>
-                </div>
-                <CardDescription>
-                  {'Test protocol and setting changes in a safe environment before applying to production'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <Label>{'Select Changes to Simulate'}</Label>
-                  <div className="space-y-2">
-                    {[
-                      { id: 'reagent', label: 'Replace with new reagent lot', impact: 'high' },
-                      { id: 'column', label: 'Install fresh analytical column', impact: 'medium' },
-                      { id: 'temp', label: 'Reduce column temperature by 5°C', impact: 'low' },
-                      { id: 'flow', label: 'Adjust flow rate to 0.8 mL/min', impact: 'low' },
-                    ].map((change) => (
-                      <div key={change.id} className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50">
-                        <Checkbox
-                          id={change.id}
-                          checked={selectedChanges.includes(change.id)}
-                          onCheckedChange={() => toggleChange(change.id)}
-                        />
-                        <Label htmlFor={change.id} className="flex-1 cursor-pointer">
-                          {change.label}
-                        </Label>
-                        <Badge
-                          variant={
-                            change.impact === 'high'
-                              ? 'default'
-                              : change.impact === 'medium'
-                              ? 'secondary'
-                              : 'outline'
-                          }
-                        >
-                          {change.impact}{' impact'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  onClick={runSimulation}
-                  disabled={selectedChanges.length === 0 || simulationRun}
-                  className="w-full"
-                  size="lg"
-                >
-                  <Play className="mr-2 h-4 w-4" />
-                  {'Simulate Impact'}
-                </Button>
-
-                {simulationRun && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg">
-                      <div className="flex items-start gap-3 mb-3">
-                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-green-900 dark:text-green-100">
-                            {'Simulation Complete'}
-                          </p>
-                          <p className="text-sm text-green-700 dark:text-green-300">
-                            {'Predicted outcome based on historical data and system models'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 mt-4">
-                        <div className="p-3 bg-background rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            <p className="text-xs text-muted-foreground">{'Predicted Pass Rate'}</p>
-                          </div>
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{'94%'}</p>
-                          <p className="text-xs text-muted-foreground">{'(Current: 68%)'}</p>
-                        </div>
-                        <div className="p-3 bg-background rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            <p className="text-xs text-muted-foreground">{'QC Pass Probability'}</p>
-                          </div>
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{'91%'}</p>
-                          <p className="text-xs text-muted-foreground">{'High confidence'}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 p-3 bg-background rounded-lg">
-                        <p className="text-sm font-medium mb-2">{'Simulation Notes:'}</p>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          {'Based on the selected changes, the model predicts a significant improvement in assay reliability. The new reagent lot alone accounts for most of the improvement (26% increase), with the fresh column providing additional stability. These changes are recommended for immediate implementation.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button variant="outline" className="flex-1">
-                        {'Export Report'}
-                      </Button>
-                      <Button className="flex-1">
-                        {'Apply Changes to Production'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
+
+export default MultiAgentAnalysis

@@ -27,37 +27,47 @@ export function LIMSReports() {
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-6">
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">QC Reports</h2>
-          <p className="text-muted-foreground">Review quality control test results</p>
+        <div className="border-l-4 border-primary pl-4">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            QC Reports
+          </h2>
+          <p className="text-muted-foreground mt-1">Review quality control test results</p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent QC Results</CardTitle>
+        <Card className="shadow-sm border-muted">
+          <CardHeader className="border-b bg-muted/30">
+            <CardTitle className="text-lg">Recent QC Results</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             <div className="space-y-2">
               {qcData.map((qc) => (
                 <div
                   key={qc.id}
-                  className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                    qc.flagged ? 'bg-destructive/5 border-destructive/20' : 'hover:bg-muted/50'
+                  className={`flex items-center justify-between p-4 rounded-lg border transition-all duration-200 ${
+                    qc.flagged 
+                      ? 'bg-destructive/5 border-destructive/30 hover:border-destructive/50 shadow-sm' 
+                      : 'hover:bg-muted/50 border-border hover:shadow-sm'
                   }`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <p className="font-mono text-sm font-medium">{qc.id}</p>
-                      {qc.flagged && <AlertCircle className="h-4 w-4 text-destructive" />}
+                      <p className="font-mono text-sm font-semibold">{qc.id}</p>
+                      {qc.flagged && (
+                        <div className="h-6 w-6 rounded-full bg-destructive/10 flex items-center justify-center">
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm mt-1">{qc.assay}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Result: {qc.result}</p>
+                    <p className="text-sm mt-1.5 font-medium">{qc.assay}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Result: <span className="font-mono font-medium">{qc.result}</span>
+                    </p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">{qc.date}</span>
+                    <span className="text-sm text-muted-foreground font-medium">{qc.date}</span>
                     <Badge
                       variant={qc.status === 'Pass' ? 'default' : 'destructive'}
-                      className={qc.status === 'Pass' ? 'bg-green-500' : ''}
+                      className={qc.status === 'Pass' ? 'bg-[#034078] hover:bg-[#022750] text-white' : ''}
                     >
                       {qc.status}
                     </Badge>
@@ -65,6 +75,7 @@ export function LIMSReports() {
                       <Button
                         size="sm"
                         onClick={() => handleAskAssistant(qc)}
+                        className="shadow-sm hover:shadow-md transition-shadow"
                       >
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Ask Assistant

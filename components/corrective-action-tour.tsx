@@ -54,33 +54,39 @@ export function CorrectiveActionTour({ onComplete }: { onComplete: () => void })
 
   return (
     <>
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/60 z-50 animate-in fade-in duration-300" />
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-300" />
 
-      {/* Tour Card */}
-      <Card className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[500px] shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <Card className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[500px] shadow-2xl border-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <CardContent className="p-6">
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="inline-flex items-center rounded-full bg-gradient-to-r from-primary to-primary/80 px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
                   Step {currentStep + 1} of {tourSteps.length}
                 </span>
-                {isLastStep && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+                {isLastStep && (
+                  <div className="h-6 w-6 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  </div>
+                )}
               </div>
-              <h3 className="text-lg font-semibold">{step.title}</h3>
+              <h3 className="text-xl font-bold">{step.title}</h3>
             </div>
-            <Button variant="ghost" size="sm" onClick={onComplete}>
+            <Button variant="ghost" size="sm" onClick={onComplete} className="hover:bg-muted">
               <X className="h-4 w-4" />
             </Button>
           </div>
 
-          <p className="text-sm text-muted-foreground mb-6">
+          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
             {step.description}
           </p>
 
           <div className="flex items-center justify-end gap-3">
-            <Button onClick={handleNext} className="min-w-32">
+            <Button 
+              onClick={handleNext} 
+              className="min-w-32 shadow-sm hover:shadow-md transition-shadow"
+              size="lg"
+            >
               {isLastStep ? 'Complete' : step.action}
               {!isLastStep && <ArrowRight className="ml-2 h-4 w-4" />}
             </Button>
