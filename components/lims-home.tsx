@@ -109,8 +109,8 @@ export function LIMSHome({
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/50 dark:bg-destructive/20 border border-destructive/20 dark:border-destructive/90 hover:bg-destructive/10 dark:hover:bg-destructive/95 transition-colors cursor-pointer">
-                  <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/30 transition-colors cursor-pointer">
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">QC Failure Detected</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Content uniformity test failed - QC-2024-003</p>

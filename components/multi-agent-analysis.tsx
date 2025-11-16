@@ -32,7 +32,7 @@ interface Link {
 }
 
 export function MultiAgentAnalysis() {
-  const [iterationRange, setIterationRange] = useState([8])
+  const [iterationRange, setIterationRange] = useState([9])
   const [showRejected, setShowRejected] = useState(false)
   const [showDependencies, setShowDependencies] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -160,7 +160,8 @@ export function MultiAgentAnalysis() {
     if (!svgRef.current) return
 
     const svg = d3.select(svgRef.current)
-    const width = svgRef.current.clientWidth
+    const containerWidth = svgRef.current.parentElement?.clientWidth || 1200
+    const width = containerWidth - 80 // Increased padding from 40 to 80
     const height = 600
 
     svg.selectAll('*').remove()
@@ -179,9 +180,8 @@ export function MultiAgentAnalysis() {
     const maxIter = Math.max(...visibleNodes.map(n => n.iteration))
     const xScale = d3.scaleLinear()
       .domain([0, maxIter + 1])
-      .range([80, width - 80])
+      .range([120, width - 120]) // Increased from 100 to 120 for better fit
 
-    // Group nodes by iteration to calculate y positions
     const nodesByIteration = d3.group(visibleNodes, n => n.iteration)
     nodesByIteration.forEach((iterNodes, iter) => {
       const ySpacing = height / (iterNodes.length + 1)
@@ -192,6 +192,14 @@ export function MultiAgentAnalysis() {
     })
 
     const g = svg.append('g')
+
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 2]) // Allow zooming from 50% to 200%
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform)
+      })
+
+    svg.call(zoom)
 
     const validLinks = links.filter(link => {
       return nodeMap.has(link.source) && nodeMap.has(link.target)
@@ -300,13 +308,23 @@ export function MultiAgentAnalysis() {
     if (isPlaying) {
       interval = setInterval(() => {
         setIterationRange(prev => {
-          const newVal = prev[0] >= 8 ? 1 : prev[0] + 1
-          return [newVal]
+          if (prev[0] >= 9) {
+            setIsPlaying(false)
+            return prev
+          }
+          return [prev[0] + 1]
         })
       }, 1000)
     }
     return () => clearInterval(interval)
   }, [isPlaying])
+
+  const handlePlayClick = () => {
+    if (!isPlaying) {
+      setIterationRange([1])
+    }
+    setIsPlaying(!isPlaying)
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -373,7 +391,7 @@ export function MultiAgentAnalysis() {
               <Button
                 variant={isPlaying ? "destructive" : "default"}
                 size="icon"
-                onClick={() => setIsPlaying(!isPlaying)}
+                onClick={handlePlayClick}
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </Button>
@@ -391,7 +409,7 @@ export function MultiAgentAnalysis() {
                   value={iterationRange}
                   onValueChange={setIterationRange}
                   min={1}
-                  max={8}
+                  max={9}
                   step={1}
                   className="flex-1"
                 />
@@ -426,8 +444,11 @@ export function MultiAgentAnalysis() {
           </div>
 
           {/* D3 Visualization */}
-          <div className="relative border rounded-lg bg-background/50">
-            <svg ref={svgRef} width="100%" height="600" className="overflow-visible" />
+          <div className="relative border rounded-lg bg-background/50 overflow-hidden w-full p-6">
+            <div className="absolute top-2 right-2 z-10 bg-muted/90 backdrop-blur-sm px-3 py-1.5 rounded text-xs text-muted-foreground border">
+              💡 Drag to pan • Scroll to zoom
+            </div>
+            <svg ref={svgRef} width="100%" height="600" className="block cursor-grab active:cursor-grabbing" />
             
             {/* Tooltip */}
             {selectedNode && (
@@ -519,23 +540,23 @@ export function MultiAgentAnalysis() {
                 </p>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 bg-background border rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Data Sources Analyzed</p>
-              <p className="text-2xl font-bold">4</p>
-              <p className="text-xs text-muted-foreground">Logs, QC, Telemetry, Env</p>
-            </div>
-            <div className="p-4 bg-background border rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Hypotheses Generated</p>
-              <p className="text-2xl font-bold">{Math.floor(iterationRange[0] * 2.5)}</p>
-              <p className="text-xs text-muted-foreground">Across all iterations</p>
-            </div>
-            <div className="p-4 bg-background border rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Collaboration Events</p>
-              <p className="text-2xl font-bold">{Math.floor(iterationRange[0] * 4.2)}</p>
-              <p className="text-xs text-muted-foreground">Inter-agent communications</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 bg-background border rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Data Sources Analyzed</p>
+                <p className="text-2xl font-bold">4</p>
+                <p className="text-xs text-muted-foreground">Logs, QC, Telemetry, Env</p>
+              </div>
+              <div className="p-4 bg-background border rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Hypotheses Generated</p>
+                <p className="text-2xl font-bold">{Math.floor(iterationRange[0] * 2.5)}</p>
+                <p className="text-xs text-muted-foreground">Across all iterations</p>
+              </div>
+              <div className="p-4 bg-background border rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Collaboration Events</p>
+                <p className="text-2xl font-bold">{Math.floor(iterationRange[0] * 4.2)}</p>
+                <p className="text-xs text-muted-foreground">Inter-agent communications</p>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -556,11 +577,145 @@ export function MultiAgentAnalysis() {
           </div>
         </CardHeader>
         <CardContent className="pt-6">
-          {/* PDF Preview */}
-          <div className="bg-white text-black p-8 rounded-lg border-2 shadow-lg">
+          {/* Agent Collaboration Details */}
+          <div className="mb-8 space-y-4">
+            <h3 className="text-lg font-semibold">Agent Collaboration Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Agent 1: Data Retrieval Agent */}
+              <Card className="shadow-sm border-l-4 border-l-[#3b82f6]">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Database className="h-4 w-4 text-[#3b82f6]" />
+                        Data Retrieval Agent
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">Iteration 1-3</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30">
+                      Active
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="text-sm space-y-2">
+                  <p className="text-muted-foreground leading-relaxed">
+                    Gathered historical QC data, instrument logs, and environmental telemetry. Identified 18 failed runs 
+                    over 14 days all linked to reagent lot 5678.
+                  </p>
+                  <div className="pt-2">
+                    <p className="text-xs font-semibold mb-1">Key Findings:</p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li>• Analyzed 247 data points across 4 sources</li>
+                      <li>• Found temporal correlation with lot introduction</li>
+                      <li>• Detected {'>'}27°C temperature spikes during failures</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Agent 2: Correlation Agent */}
+              <Card className="shadow-sm border-l-4 border-l-[#8b5cf6]">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-[#8b5cf6]" />
+                        Correlation Agent
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">Iteration 3-6</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-[#8b5cf6]/10 text-[#8b5cf6] border-[#8b5cf6]/30">
+                      Active
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="text-sm space-y-2">
+                  <p className="text-muted-foreground leading-relaxed">
+                    Performed statistical analysis on data patterns. Established 80% correlation coefficient between 
+                    reagent lot 5678 and assay failures with p {'<'} 0.001.
+                  </p>
+                  <div className="pt-2">
+                    <p className="text-xs font-semibold mb-1">Key Findings:</p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li>• 80% of failures linked to specific lot</li>
+                      <li>• No instrument-specific pattern detected</li>
+                      <li>• Time-based degradation curve identified</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Agent 3: Evaluation Agent */}
+              <Card className="shadow-sm border-l-4 border-l-[#ec4899]">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Beaker className="h-4 w-4 text-[#ec4899]" />
+                        Evaluation Agent
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">Iteration 6-8</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-[#ec4899]/10 text-[#ec4899] border-[#ec4899]/30">
+                      Active
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="text-sm space-y-2">
+                  <p className="text-muted-foreground leading-relaxed">
+                    Validated reagent hypothesis through lab records and tested alternative explanations. 
+                    Confirmed reagent degradation as primary cause.
+                  </p>
+                  <div className="pt-2">
+                    <p className="text-xs font-semibold mb-1">Key Findings:</p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li>• Rejected 12 alternative hypotheses</li>
+                      <li>• Validated with reagent stability data</li>
+                      <li>• Cross-referenced with supplier quality reports</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Agent 4: Summary Agent */}
+              <Card className="shadow-sm border-l-4 border-l-[#10b981]">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-[#10b981]" />
+                        Summary Agent
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">Iteration 8-9</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30">
+                      Completed
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="text-sm space-y-2">
+                  <p className="text-muted-foreground leading-relaxed">
+                    Synthesized findings from all agents. Selected reagent lot 5678 as root cause with 92% confidence 
+                    based on multi-source validation and statistical significance.
+                  </p>
+                  <div className="pt-2">
+                    <p className="text-xs font-semibold mb-1">Key Findings:</p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li>• Integrated evidence from 3 agents</li>
+                      <li>• Assigned 92% confidence to root cause</li>
+                      <li>• Generated actionable recommendations</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="bg-white text-black p-8 rounded-lg border-2 shadow-lg max-w-full">
             <div className="space-y-6">
               <div className="border-b-2 border-gray-300 pb-4">
                 <h1 className="text-2xl font-bold text-gray-900">Multi-Agent Diagnostic Analysis Report</h1>
+                <p className="text-sm text-gray-600 mt-2">Comprehensive Root Cause Analysis for Recurring Lab Anomalies</p>
                 <div className="grid grid-cols-2 gap-4 mt-4 text-sm text-gray-600">
                   <div>
                     <p className="font-semibold">Analysis ID:</p>
@@ -578,6 +733,14 @@ export function MultiAgentAnalysis() {
                     <p className="font-semibold">Confidence:</p>
                     <p className="text-green-600 font-semibold">92%</p>
                   </div>
+                  <div>
+                    <p className="font-semibold">Assay:</p>
+                    <p>XYZ Assay Protocol v3.2</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Instruments:</p>
+                    <p>HPLC-002, HPLC-004</p>
+                  </div>
                 </div>
               </div>
 
@@ -585,36 +748,144 @@ export function MultiAgentAnalysis() {
                 <h2 className="text-lg font-bold text-gray-900 mb-2">Executive Summary</h2>
                 <p className="text-sm text-gray-700 leading-relaxed">
                   Multi-agent collaborative analysis across {iterationRange[0]} iterations identified reagent lot 5678 as the primary 
-                  root cause of recurring failures in Assay XYZ with 92% confidence. Four specialized agents gathered data from 
-                  multiple sources, formed and evaluated hypotheses through iterative collaboration, and converged on this 
-                  conclusion with high statistical significance.
+                  root cause of recurring failures in Assay XYZ with 92% confidence. Four specialized agents—Data Retrieval, 
+                  Correlation, Evaluation, and Summary—gathered data from multiple sources, formed and evaluated hypotheses 
+                  through iterative collaboration, and converged on this conclusion with high statistical significance. 
+                  The analysis revealed an 80% correlation between failures and the suspect reagent lot, supported by 
+                  environmental data, QC trending, and supplier quality records.
                 </p>
               </div>
 
               <div>
-                <h2 className="text-lg font-bold text-gray-900 mb-2">Key Findings</h2>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
-                    <p className="text-gray-700">80% correlation between failed runs and reagent lot 5678</p>
+                <h2 className="text-lg font-bold text-gray-900 mb-3">Detailed Findings</h2>
+                
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded border">
+                    <h3 className="font-semibold text-gray-900 mb-2">1. Data Collection Phase (Iterations 1-3)</h3>
+                    <p className="text-sm text-gray-700 leading-relaxed mb-2">
+                      The Data Retrieval Agent systematically gathered 247 data points from instrument logs, QC databases, 
+                      environmental monitoring systems, and telemetry. Analysis revealed 18 failed assay runs over a 14-day 
+                      period, all occurring after reagent lot 5678 was introduced to the workflow.
+                    </p>
+                    <div className="text-sm text-gray-700">
+                      <p className="font-semibold mb-1">Evidence Sources:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Instrument error logs showing consistent calibration drift</li>
+                        <li>QC trending data indicating systematic bias</li>
+                        <li>Environmental records showing temperature spikes {'>'} 27°C</li>
+                        <li>Reagent inventory timestamps correlating with failure onset</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
-                    <p className="text-gray-700">Statistical significance confirmed through {iterationRange[0]} agent collaboration cycles</p>
+
+                  <div className="bg-gray-50 p-4 rounded border">
+                    <h3 className="font-semibold text-gray-900 mb-2">2. Correlation Analysis (Iterations 3-6)</h3>
+                    <p className="text-sm text-gray-700 leading-relaxed mb-2">
+                      The Correlation Agent performed statistical analysis revealing an 80% correlation coefficient 
+                      (p {'<'} 0.001) between reagent lot 5678 usage and assay failures. Temporal analysis showed degradation 
+                      patterns consistent with reagent instability over time, particularly when exposed to elevated temperatures.
+                    </p>
+                    <div className="text-sm text-gray-700">
+                      <p className="font-semibold mb-1">Statistical Evidence:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Pearson correlation: r = 0.80, p {'<'} 0.001</li>
+                        <li>Failed runs: 18/22 (82%) used lot 5678</li>
+                        <li>Successful runs: 94% used different lots</li>
+                        <li>No significant instrument-specific effects detected</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5" />
-                    <p className="text-gray-700">Multiple data sources validated the hypothesis independently</p>
+
+                  <div className="bg-gray-50 p-4 rounded border">
+                    <h3 className="font-semibold text-gray-900 mb-2">3. Hypothesis Validation (Iterations 6-8)</h3>
+                    <p className="text-sm text-gray-700 leading-relaxed mb-2">
+                      The Evaluation Agent tested 12 alternative hypotheses including instrument malfunction, operator error, 
+                      environmental factors, and calibration issues. Each was systematically ruled out through evidence-based 
+                      analysis. Cross-referencing with supplier quality reports revealed stability concerns with lot 5678.
+                    </p>
+                    <div className="text-sm text-gray-700">
+                      <p className="font-semibold mb-1">Rejected Alternative Hypotheses:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Instrument malfunction (all instruments passed calibration)</li>
+                        <li>Operator error (multiple trained operators affected)</li>
+                        <li>Environmental contamination (clean room logs normal)</li>
+                        <li>Sample quality issues (pre-analytical controls passed)</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded border">
+                    <h3 className="font-semibold text-gray-900 mb-2">4. Root Cause Determination (Iterations 8-9)</h3>
+                    <p className="text-sm text-gray-700 leading-relaxed mb-2">
+                      The Summary Agent synthesized evidence from all prior agents, weighing confidence levels and statistical 
+                      significance. Reagent lot 5678 emerged as the root cause with 92% confidence, supported by multi-source 
+                      validation, temporal correlation, and elimination of alternatives.
+                    </p>
+                    <div className="text-sm text-gray-700">
+                      <p className="font-semibold mb-1">Confidence Calculation:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Statistical correlation strength: 30 points</li>
+                        <li>Multi-source validation: 25 points</li>
+                        <li>Alternative hypothesis elimination: 20 points</li>
+                        <li>Supplier data corroboration: 17 points</li>
+                        <li><span className="font-semibold">Total Confidence: 92%</span></li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div>
                 <h2 className="text-lg font-bold text-gray-900 mb-2">Recommended Actions</h2>
-                <div className="border-l-4 border-red-500 pl-3 py-2">
-                  <p className="font-semibold text-gray-900">Immediate: Quarantine and replace reagent lot 5678</p>
-                  <p className="text-sm text-gray-600">Expected to resolve 80% of recurring failures</p>
+                <div className="space-y-3">
+                  <div className="border-l-4 border-red-600 pl-4 py-2 bg-red-50">
+                    <p className="font-semibold text-red-900 text-sm">IMMEDIATE (Within 24 hours)</p>
+                    <ul className="text-sm text-red-800 mt-1 space-y-1">
+                      <li>• Quarantine all remaining reagent from lot 5678</li>
+                      <li>• Replace with validated alternative lot</li>
+                      <li>• Retest any pending samples processed with suspect lot</li>
+                    </ul>
+                    <p className="text-xs text-red-700 mt-2 italic">Expected impact: Resolve 80% of recurring failures</p>
+                  </div>
+
+                  <div className="border-l-4 border-amber-600 pl-4 py-2 bg-amber-50">
+                    <p className="font-semibold text-amber-900 text-sm">SHORT-TERM (Within 1 week)</p>
+                    <ul className="text-sm text-amber-800 mt-1 space-y-1">
+                      <li>• Contact supplier regarding lot 5678 stability issues</li>
+                      <li>• Implement enhanced reagent acceptance testing</li>
+                      <li>• Review storage conditions for all reagent lots</li>
+                      <li>• Document investigation findings in QMS</li>
+                    </ul>
+                  </div>
+
+                  <div className="border-l-4 border-blue-600 pl-4 py-2 bg-blue-50">
+                    <p className="font-semibold text-blue-900 text-sm">LONG-TERM (Within 1 month)</p>
+                    <ul className="text-sm text-blue-800 mt-1 space-y-1">
+                      <li>• Establish real-time reagent quality monitoring</li>
+                      <li>• Implement automated anomaly detection alerts</li>
+                      <li>• Review and update reagent qualification procedures</li>
+                      <li>• Consider alternative supplier qualification</li>
+                    </ul>
+                  </div>
                 </div>
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-2">Conclusion</h2>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Through {iterationRange[0]} iterations of multi-agent collaborative analysis, this investigation successfully 
+                  identified reagent lot 5678 as the root cause of recurring assay failures with 92% confidence. The systematic 
+                  approach—combining data retrieval, statistical correlation, hypothesis validation, and evidence synthesis—
+                  provides a robust, scientifically-sound conclusion suitable for regulatory documentation and corrective action 
+                  planning. Immediate replacement of the suspect reagent lot is expected to resolve the majority of failures and 
+                  restore assay performance to acceptable levels.
+                </p>
+              </div>
+
+              <div className="border-t-2 border-gray-300 pt-4 mt-6">
+                <p className="text-xs text-gray-500 text-center">
+                  © 2025 ADAPT LIMS • For laboratory demonstration purposes only.
+                </p>
               </div>
             </div>
           </div>

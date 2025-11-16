@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Beaker, User, ChevronDown } from 'lucide-react'
+import { Beaker, User, ChevronDown, MessageSquare, Ticket } from 'lucide-react'
 import { LIMSHome } from '@/components/lims-home'
 import { LIMSSamples } from '@/components/lims-samples'
 import { LIMSInstruments } from '@/components/lims-instruments'
@@ -10,6 +10,7 @@ import { LIMSReports } from '@/components/lims-reports'
 import { CalibrationPage } from '@/components/calibration-page'
 import { MultiAgentAnalysis } from '@/components/multi-agent-analysis'
 import { Footer } from '@/components/footer'
+import { QCAssistantModal } from '@/components/qc-assistant-modal'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,18 @@ export type LIMSPage = 'home' | 'samples' | 'instruments' | 'reports' | 'calibra
 export default function Page() {
   const [currentPage, setCurrentPage] = useState<LIMSPage>('home')
   const [showOnboarding, setShowOnboarding] = useState(true)
+  const [showAssistant, setShowAssistant] = useState(false)
+  const [assistantMode, setAssistantMode] = useState<'general' | 'ticket'>('general')
+
+  const handleOpenAssistant = () => {
+    setAssistantMode('general')
+    setShowAssistant(true)
+  }
+
+  const handleOpenTicket = () => {
+    setAssistantMode('ticket')
+    setShowAssistant(true)
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -92,6 +105,15 @@ export default function Page() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={handleOpenAssistant}>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Ask Assistant
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleOpenTicket}>
+                    <Ticket className="h-4 w-4 mr-2" />
+                    Open Support Ticket
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setShowOnboarding(true)}>
                     Onboarding Assistant
                   </DropdownMenuItem>
@@ -116,6 +138,18 @@ export default function Page() {
 
       {/* Footer */}
       <Footer />
+
+      <QCAssistantModal
+        open={showAssistant}
+        onOpenChange={setShowAssistant}
+        mode={assistantMode}
+        qcData={{
+          id: 'QC-2024-003',
+          assay: 'Content Uniformity',
+          status: 'Fail',
+          result: 'RSD 8.2%'
+        }}
+      />
     </div>
   )
 }

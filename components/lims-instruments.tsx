@@ -85,7 +85,7 @@ export function LIMSInstruments() {
                           Maintains consistent temperature for reproducible retention times.
                         </p>
                         <button
-                          onClick={() => openVideo('9bZkp7q19f0')}
+                          onClick={() => openVideo('m-bH_mQQ-Dg')}
                           className="text-xs text-[#4cc9eb] hover:text-[#88dbf2] hover:underline font-medium"
                         >
                           Watch tutorial video →
@@ -115,7 +115,7 @@ export function LIMSInstruments() {
                           Current backpressure in the system. High pressure may indicate column blockage.
                         </p>
                         <button
-                          onClick={() => openVideo('L_LUpnjgPso')}
+                          onClick={() => openVideo('KnFbPtieRTE')}
                           className="text-xs text-[#4cc9eb] hover:text-[#88dbf2] hover:underline font-medium"
                         >
                           Watch tutorial video →
@@ -145,7 +145,7 @@ export function LIMSInstruments() {
                           Mobile phase flow rate through the column. Affects separation time and resolution.
                         </p>
                         <button
-                          onClick={() => openVideo('oHg5SJYRHA0')}
+                          onClick={() => openVideo('m-bH_mQQ-Dg')}
                           className="text-xs text-[#4cc9eb] hover:text-[#88dbf2] hover:underline font-medium"
                         >
                           Watch tutorial video →
