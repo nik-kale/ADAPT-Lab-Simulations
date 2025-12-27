@@ -1,6 +1,7 @@
 {
-  "name": "my-v0-project",
+  "name": "adapt-lab-simulations",
   "version": "0.1.0",
+  "description": "An interactive web application demonstrating next-generation AI-powered workflows for modern laboratory information management systems (LIMS)",
   "private": true,
   "scripts": {
     "build": "next build",
